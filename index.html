@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1C1F26">
+<title>JRTAP CHB Board</title>
+<style>
+:root{
+  --board:#FAFAF8;
+  --ink:#1C1F26;
+  --slate:#5A6270;
+  --hair:#DFE0DC;
+  --red:#E03127;
+  --red-deep:#A8231B;
+  --green:#2F7D54;
+  --amber:#B8791B;
+  --panel:#FFFFFF;
+  --shadow:0 1px 0 var(--hair);
+  --num:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--board);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px;line-height:1.45;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- shell ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:var(--ink);color:#fff;
+  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
+  display:flex;align-items:baseline;gap:10px;
+}
+header .mark{font-weight:800;letter-spacing:-.02em}
+header .mark b{color:var(--red)}
+header .who{margin-left:auto;font-size:12px;color:#9AA0AA}
+header button.out{background:none;border:0;color:#9AA0AA;font-size:12px;padding:4px 0}
+main{padding:16px 16px 96px;max-width:720px;margin:0 auto}
+h2{font-size:15px;font-weight:650;margin:0 0 10px;color:var(--slate)}
+.panel{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:14px;margin-bottom:14px}
+
+/* ---------- tab bar ---------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;
+  background:var(--panel);border-top:1px solid var(--hair);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{
+  flex:1;background:none;border:0;padding:9px 2px 8px;
+  font-size:11px;color:var(--slate);display:flex;flex-direction:column;
+  align-items:center;gap:3px;border-top:3px solid transparent;margin-top:-1px;
+}
+nav button .g{font-size:17px;line-height:1}
+nav button[aria-current="true"]{color:var(--red);border-top-color:var(--red);font-weight:650}
+
+/* ---------- the board figure ---------- */
+.board-total{
+  border:2px solid var(--ink);border-radius:10px;background:var(--panel);
+  padding:16px;text-align:center;margin-bottom:14px;
+}
+.board-total .cap{font-size:12px;color:var(--slate)}
+.board-total .fig{font-size:clamp(44px,15vw,68px);font-weight:800;line-height:1;margin:2px 0 4px}
+.board-total .sub{font-size:13px;color:var(--slate)}
+.board-total .sub b{color:var(--ink)}
+
+/* ---------- stat grid ---------- */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:10px 11px}
+.stat .k{font-size:11px;color:var(--slate);margin-bottom:3px}
+.stat .v{font-size:20px;font-weight:700;line-height:1.1}
+.stat.good .v{color:var(--green)}
+.stat.warn .v{color:var(--amber)}
+
+/* ---------- fields ---------- */
+label.f{display:block;margin-bottom:11px}
+label.f > span{display:block;font-size:12px;color:var(--slate);margin-bottom:4px}
+input[type=date],input[type=number],input[type=text],input[type=email],
+input[type=password],select{
+  width:100%;padding:11px 12px;border:1px solid var(--hair);border-radius:8px;
+  background:var(--panel);
+}
+input[type=number]{font-family:var(--num);font-variant-numeric:tabular-nums}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+
+/* ---------- crew chips ---------- */
+.crew{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:7px}
+.chip{
+  border:1px solid var(--hair);border-radius:8px;background:var(--panel);
+  padding:8px 6px;text-align:center;
+}
+.chip .n{font-size:13px;font-weight:650;display:block}
+.chip .lv{font-size:10px;color:var(--slate)}
+.chip .seg{display:flex;gap:3px;margin-top:6px}
+.chip .seg button{
+  flex:1;border:1px solid var(--hair);background:var(--board);border-radius:5px;
+  padding:5px 0;font-size:11px;color:var(--slate);
+}
+.chip .seg button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.on{border-color:var(--ink)}
+.chip.half .seg button[aria-pressed="true"]{background:var(--amber);border-color:var(--amber)}
+
+/* ---------- buttons ---------- */
+.btn{
+  display:block;width:100%;padding:14px;border:0;border-radius:9px;
+  background:var(--red);color:#fff;font-weight:700;font-size:16px;
+}
+.btn:active{background:var(--red-deep)}
+.btn[disabled]{background:var(--slate);opacity:.6}
+.btn.ghost{background:none;border:1px solid var(--hair);color:var(--ink);font-weight:600}
+.btn.sm{padding:9px;font-size:14px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--hair);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{font-size:11px;color:var(--slate);font-weight:600}
+td.n{font-family:var(--num);font-variant-numeric:tabular-nums}
+tr.total td{font-weight:750;border-top:2px solid var(--ink);border-bottom:0}
+td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
+
+/* ---------- misc ---------- */
+.msg{padding:11px 13px;border-radius:8px;font-size:14px;margin-bottom:12px}
+.msg.err{background:#FDECEA;color:var(--red-deep);border:1px solid #F5C6C2}
+.msg.ok{background:#E8F4ED;color:var(--green);border:1px solid #BFE0CD}
+.empty{padding:26px 12px;text-align:center;color:var(--slate);font-size:14px}
+.hint{font-size:12px;color:var(--slate);margin-top:-4px}
+.spark{width:100%;height:auto;display:block}
+.hidden{display:none!important}
+
+/* ---------- login ---------- */
+.login-wrap{min-height:100svh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login{width:100%;max-width:340px}
+.login .mark{font-size:30px;font-weight:800;letter-spacing:-.03em;margin-bottom:2px}
+.login .mark b{color:var(--red)}
+.login .tag{font-size:13px;color:var(--slate);margin-bottom:22px}
+
+@media print{
+  header,nav,.noprint{display:none!important}
+  main{padding:0;max-width:none}
+  .panel{border:0;padding:0}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login" class="login-wrap">
+  <form class="login" id="loginForm">
+    <div class="mark">JRTAP <b>CHB</b></div>
+    <div class="tag">Production and payroll board</div>
+    <div id="loginMsg"></div>
+    <label class="f"><span>Email</span>
+      <input type="email" id="email" autocomplete="username" required></label>
+    <label class="f"><span>Password</span>
+      <input type="password" id="password" autocomplete="current-password" required></label>
+    <button class="btn" type="submit" id="loginBtn">Sign in</button>
+  </form>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header>
+    <div class="mark">JRTAP <b>CHB</b></div>
+    <div class="who"><span id="whoami"></span> <button class="out" id="signout">Sign out</button></div>
+  </header>
+
+  <main>
+    <div id="banner"></div>
+
+    <!-- ---------- TODAY ---------- -->
+    <section id="v-today">
+      <h2>Enter the board</h2>
+      <div class="panel">
+        <label class="f"><span>Date</span><input type="date" id="d-date"></label>
+        <span class="f"><span style="display:block;font-size:12px;color:var(--slate);margin-bottom:4px">Column totals</span></span>
+        <div class="row3">
+          <label class="f"><span>CHB4 col-1</span><input type="number" id="d-a" inputmode="numeric" min="0"></label>
+          <label class="f"><span>CHB4 col-2</span><input type="number" id="d-b" inputmode="numeric" min="0"></label>
+          <label class="f"><span>CHB5</span><input type="number" id="d-c5" inputmode="numeric" min="0"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Cement bags</span><input type="number" id="d-cem" inputmode="decimal" min="0" step="0.5"></label>
+          <label class="f"><span>Sale</span>
+            <select id="d-sale"><option>Pickup</option><option>Near</option><option>Far</option></select></label>
+        </div>
+      </div>
+
+      <div class="board-total">
+        <div class="cap">Total pieces</div>
+        <div class="fig num" id="t-total">0</div>
+        <div class="sub">rate <b class="num" id="t-rate">—</b> · crew <b class="num" id="t-hc">0</b>
+          · share <b class="num" id="t-share">₱0</b></div>
+      </div>
+
+      <h2>Who worked</h2>
+      <div class="panel">
+        <div class="crew" id="crew"></div>
+      </div>
+
+      <button class="btn" id="saveDay">Save day</button>
+      <p class="hint" id="saveHint"></p>
+    </section>
+
+    <!-- ---------- BOARD ---------- -->
+    <section id="v-board" class="hidden">
+      <h2>All time</h2>
+      <div class="stats" id="kpis"></div>
+      <div class="panel">
+        <h2>Pieces per day</h2>
+        <svg class="spark" id="sparkPcs" viewBox="0 0 320 90" preserveAspectRatio="none" role="img"
+             aria-label="Daily pieces"></svg>
+      </div>
+      <div class="panel">
+        <h2>Profit per day</h2>
+        <svg class="spark" id="sparkProfit" viewBox="0 0 320 90" preserveAspectRatio="none" role="img"
+             aria-label="Daily profit"></svg>
+      </div>
+      <div class="panel">
+        <h2>Every day</h2>
+        <div style="overflow-x:auto"><table id="daysTable"></table></div>
+      </div>
+    </section>
+
+    <!-- ---------- PAY ---------- -->
+    <section id="v-pay" class="hidden">
+      <h2>Weekly payslip</h2>
+      <div class="panel noprint">
+        <label class="f"><span>Week (Monday to Saturday)</span><select id="weekPick"></select></label>
+        <button class="btn ghost sm" id="printSlip">Print payslip</button>
+      </div>
+      <div class="panel">
+        <div style="overflow-x:auto"><table id="payTable"></table></div>
+        <p class="hint">Net pay is what the worker receives. Bale remaining carries to next week.</p>
+      </div>
+    </section>
+
+    <!-- ---------- CREW ---------- -->
+    <section id="v-crew" class="hidden">
+      <h2>Crew and promotion</h2>
+      <div class="panel">
+        <div style="overflow-x:auto"><table id="crewTable"></table></div>
+      </div>
+      <div class="panel">
+        <h2>Add or edit a worker</h2>
+        <label class="f"><span>Worker</span><select id="w-pick"></select></label>
+        <label class="f"><span>Name</span><input type="text" id="w-name"></label>
+        <div class="row2">
+          <label class="f"><span>Level</span><select id="w-level">
+            <option>Driver</option><option>Senior Extra</option><option>Senior</option><option>Junior</option>
+          </select></label>
+          <label class="f"><span>Base pay</span><input type="number" id="w-base" inputmode="decimal"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Started</span><input type="date" id="w-start"></label>
+          <label class="f"><span>Days before app</span><input type="number" id="w-before" inputmode="decimal" step="0.5"></label>
+        </div>
+        <label class="f"><span>Status</span><select id="w-active">
+          <option value="true">Active</option><option value="false">Inactive</option></select></label>
+        <button class="btn sm" id="saveWorker">Save worker</button>
+      </div>
+    </section>
+
+    <!-- ---------- SETUP ---------- -->
+    <section id="v-setup" class="hidden">
+      <h2>Commission tiers</h2>
+      <div class="panel">
+        <table id="tierTable"></table>
+        <p class="hint">The day's total pieces decide which rate everyone gets.</p>
+        <button class="btn ghost sm" id="saveTiers" style="margin-top:10px">Save tiers</button>
+      </div>
+      <h2>Costs and prices</h2>
+      <div class="panel">
+        <div class="row2">
+          <label class="f"><span>Cement per bag</span><input type="number" id="s-cement" step="0.01"></label>
+          <label class="f"><span>Gravel per piece</span><input type="number" id="s-gravel" step="0.01"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Utilities per piece</span><input type="number" id="s-util" step="0.01"></label>
+          <label class="f"><span>Promotion days</span><input type="number" id="s-promo"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Delivery near</span><input type="number" id="s-dnear" step="0.01"></label>
+          <label class="f"><span>Delivery far</span><input type="number" id="s-dfar" step="0.01"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>CHB4 pickup</span><input type="number" id="s-p4" step="0.01"></label>
+          <label class="f"><span>CHB5 pickup</span><input type="number" id="s-p5" step="0.01"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>CHB4 delivered</span><input type="number" id="s-p4d" step="0.01"></label>
+          <label class="f"><span>CHB5 delivered</span><input type="number" id="s-p5d" step="0.01"></label>
+        </div>
+        <button class="btn sm" id="saveConfig">Save settings</button>
+      </div>
+    </section>
+  </main>
+
+  <nav>
+    <button data-view="today" aria-current="true"><span class="g">✎</span>Today</button>
+    <button data-view="board"><span class="g">▤</span>Board</button>
+    <button data-view="pay"><span class="g">₱</span>Pay</button>
+    <button data-view="crew"><span class="g">☰</span>Crew</button>
+    <button data-view="setup"><span class="g">⚙</span>Setup</button>
+  </nav>
+</div>
+
+<script>
+/* ==================================================================
+   JRTAP CHB Board — no libraries, plain fetch against Supabase
+   ================================================================== */
+const SUPA = "https://ttsptqmozwtahribqdvi.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0c3B0cW1vend0YWhyaWJxZHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2MjI4NTQsImV4cCI6MjEwMjE5ODg1NH0.9FIVSdSiLbwoAefAWMjuYsKgFsd4KrmhSssWqxoL6B0";
+const LS = "jrtap_chb_session";
+
+let session = null, workers = [], days = [], cfg = null, tiers = [], attendance = {};
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const peso = n => "₱" + Number(n || 0).toLocaleString("en-PH", {maximumFractionDigits:0});
+const peso2 = n => "₱" + Number(n || 0).toLocaleString("en-PH", {minimumFractionDigits:2, maximumFractionDigits:2});
+const num = n => Number(n || 0).toLocaleString("en-PH", {maximumFractionDigits:1});
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const todayISO = () => new Date().toLocaleDateString("en-CA");
+
+function mondayOf(iso){
+  const d = new Date(iso + "T00:00:00");
+  const off = (d.getDay() + 6) % 7;          // Mon=0
+  d.setDate(d.getDate() - off);
+  return d.toLocaleDateString("en-CA");
+}
+function fmtDate(iso){
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-PH", {month:"short", day:"numeric"});
+}
+function banner(text, kind){
+  $("banner").innerHTML = text ? `<div class="msg ${kind||"ok"}">${esc(text)}</div>` : "";
+  if (text) setTimeout(() => { $("banner").innerHTML = ""; }, 4000);
+}
+
+/* ---------- auth ---------- */
+async function signIn(email, password){
+  const r = await fetch(`${SUPA}/auth/v1/token?grant_type=password`, {
+    method:"POST",
+    headers:{apikey:ANON, "Content-Type":"application/json"},
+    body:JSON.stringify({email, password})
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error_description || j.msg || j.message || "Sign in failed");
+  session = j;
+  localStorage.setItem(LS, JSON.stringify(j));
+  return j;
+}
+async function refresh(){
+  if (!session?.refresh_token) return false;
+  const r = await fetch(`${SUPA}/auth/v1/token?grant_type=refresh_token`, {
+    method:"POST",
+    headers:{apikey:ANON, "Content-Type":"application/json"},
+    body:JSON.stringify({refresh_token: session.refresh_token})
+  });
+  if (!r.ok) return false;
+  session = await r.json();
+  localStorage.setItem(LS, JSON.stringify(session));
+  return true;
+}
+function signOut(){
+  localStorage.removeItem(LS);
+  session = null;
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+}
+
+/* ---------- data access ---------- */
+async function api(path, opts = {}, retry = true){
+  const r = await fetch(`${SUPA}/rest/v1/${path}`, {
+    ...opts,
+    headers:{
+      apikey: ANON,
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type":"application/json",
+      ...(opts.headers || {})
+    }
+  });
+  if (r.status === 401 && retry && await refresh()) return api(path, opts, false);
+  const text = await r.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!r.ok) throw new Error(body?.message || body?.hint || `Request failed (${r.status})`);
+  return body;
+}
+const get = q => api(q);
+const rpc = (fn, args) => api(`rpc/${fn}`, {method:"POST", body:JSON.stringify(args)});
+
+/* ---------- load everything ---------- */
+async function loadAll(){
+  [workers, days, cfg, tiers] = await Promise.all([
+    get("chb_worker_list?select=*"),
+    get("chb_days?select=*&order=log_date.desc"),
+    get("chb_config?select=*"),
+    get("chb_tier_list?select=*")
+  ]);
+  cfg = cfg[0];
+  renderCrewChips();
+  renderBoard();
+  renderCrewTable();
+  renderWorkerPicker();
+  renderTiers();
+  renderConfig();
+  await renderWeeks();
+}
+
+/* ================= TODAY ================= */
+function renderCrewChips(){
+  $("crew").innerHTML = workers.filter(w => w.active).map(w => `
+    <div class="chip" data-w="${w.id}">
+      <span class="n">${esc(w.name)}</span>
+      <span class="lv">${esc(w.level)} · ${peso(w.base_pay)}</span>
+      <div class="seg">
+        <button type="button" data-s="1">full</button>
+        <button type="button" data-s="0.5">½</button>
+        <button type="button" data-s="0">off</button>
+      </div>
+    </div>`).join("");
+
+  $("crew").querySelectorAll(".chip").forEach(chip => {
+    const id = chip.dataset.w;
+    chip.querySelectorAll(".seg button").forEach(b => {
+      b.addEventListener("click", () => {
+        const s = Number(b.dataset.s);
+        attendance[id] = s;
+        chip.querySelectorAll(".seg button").forEach(x =>
+          x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+        chip.classList.toggle("on", s > 0);
+        chip.classList.toggle("half", s === 0.5);
+        recalc();
+      });
+    });
+  });
+  setAttendance(Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 1])));
+}
+function setAttendance(map){
+  attendance = {...map};
+  $("crew").querySelectorAll(".chip").forEach(chip => {
+    const s = Number(attendance[chip.dataset.w] ?? 0);
+    chip.querySelectorAll(".seg button").forEach(b =>
+      b.setAttribute("aria-pressed", Number(b.dataset.s) === s ? "true" : "false"));
+    chip.classList.toggle("on", s > 0);
+    chip.classList.toggle("half", s === 0.5);
+  });
+  recalc();
+}
+function rateFor(pcs){
+  const t = tiers.filter(t => pcs >= t.min_pcs && pcs <= t.max_pcs)
+                 .sort((a,b) => b.min_pcs - a.min_pcs)[0];
+  return t ? Number(t.rate) : 0;
+}
+function recalc(){
+  const pcs = (+$("d-a").value || 0) + (+$("d-b").value || 0) + (+$("d-c5").value || 0);
+  const hc = Object.values(attendance).reduce((a,b) => a + Number(b || 0), 0);
+  const rate = rateFor(pcs);
+  $("t-total").textContent = num(pcs);
+  $("t-rate").textContent = pcs ? peso2(rate) : "—";
+  $("t-hc").textContent = num(hc);
+  $("t-share").textContent = hc ? peso2(pcs * rate / hc) : "₱0";
+}
+["d-a","d-b","d-c5"].forEach(id => $(id).addEventListener("input", recalc));
+
+async function loadDayInto(iso){
+  const d = days.find(x => x.log_date === iso);
+  if (!d){
+    $("d-a").value = $("d-b").value = $("d-c5").value = $("d-cem").value = "";
+    $("d-sale").value = "Pickup";
+    setAttendance(Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 1])));
+    $("saveHint").textContent = "New day.";
+    return;
+  }
+  $("d-a").value = d.chb4_a; $("d-b").value = d.chb4_b; $("d-c5").value = d.chb5;
+  $("d-cem").value = d.cement_bags ?? ""; $("d-sale").value = d.sale_type;
+  const rows = await get(`chb_worker_day?select=worker_id,share&log_date=eq.${iso}`);
+  const map = Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 0]));
+  rows.forEach(r => map[r.worker_id] = Number(r.share));
+  setAttendance(map);
+  $("saveHint").textContent = "Already saved. Editing will replace it.";
+}
+$("d-date").addEventListener("change", () => loadDayInto($("d-date").value));
+
+$("saveDay").addEventListener("click", async () => {
+  const btn = $("saveDay");
+  try{
+    btn.disabled = true; btn.textContent = "Saving…";
+    const list = Object.entries(attendance)
+      .filter(([,s]) => Number(s) > 0)
+      .map(([worker_id, share]) => ({worker_id:Number(worker_id), share:Number(share)}));
+    if (!list.length) throw new Error("Mark at least one worker present.");
+    await rpc("chb_save_day", {
+      p_date: $("d-date").value,
+      p_a: +$("d-a").value || 0,
+      p_b: +$("d-b").value || 0,
+      p_c5: +$("d-c5").value || 0,
+      p_cement: $("d-cem").value === "" ? null : +$("d-cem").value,
+      p_sale: $("d-sale").value,
+      p_attendance: list
+    });
+    days = await get("chb_days?select=*&order=log_date.desc");
+    renderBoard(); renderCrewTable(); await renderWeeks();
+    banner("Day saved.", "ok");
+    $("saveHint").textContent = "Already saved. Editing will replace it.";
+  }catch(e){ banner(e.message, "err"); }
+  finally{ btn.disabled = false; btn.textContent = "Save day"; }
+});
+
+/* ================= BOARD ================= */
+function renderBoard(){
+  const t = days.reduce((a,d) => ({
+    pcs: a.pcs + Number(d.total_pcs),
+    rev: a.rev + Number(d.revenue),
+    pay: a.pay + Number(d.payroll),
+    pro: a.pro + Number(d.profit),
+    cem: a.cem + Number(d.cement_bags || 0)
+  }), {pcs:0, rev:0, pay:0, pro:0, cem:0});
+  const n = days.length || 1;
+
+  $("kpis").innerHTML = `
+    <div class="stat"><div class="k">Days recorded</div><div class="v num">${days.length}</div></div>
+    <div class="stat"><div class="k">Total pieces</div><div class="v num">${num(t.pcs)}</div></div>
+    <div class="stat"><div class="k">Average per day</div><div class="v num">${num(Math.round(t.pcs/n))}</div></div>
+    <div class="stat"><div class="k">Best day</div><div class="v num">${num(Math.max(0,...days.map(d=>+d.total_pcs)))}</div></div>
+    <div class="stat"><div class="k">Revenue</div><div class="v num">${peso(t.rev)}</div></div>
+    <div class="stat"><div class="k">Payroll</div><div class="v num">${peso(t.pay)}</div></div>
+    <div class="stat good"><div class="k">Profit</div><div class="v num">${peso(t.pro)}</div></div>
+    <div class="stat good"><div class="k">Month at this pace</div><div class="v num">${peso(t.pro/n*22)}</div></div>
+    <div class="stat"><div class="k">Cement bags</div><div class="v num">${num(t.cem)}</div></div>
+    <div class="stat ${t.cem ? "" : "warn"}"><div class="k">Bags per 1,000</div>
+      <div class="v num">${t.pcs ? (t.cem/t.pcs*1000).toFixed(1) : "—"}</div></div>
+    <div class="stat"><div class="k">Profit per block</div><div class="v num">${peso2(t.pcs ? t.pro/t.pcs : 0)}</div></div>
+    <div class="stat"><div class="k">Labour per block</div><div class="v num">${peso2(t.pcs ? t.pay/t.pcs : 0)}</div></div>`;
+
+  const asc = [...days].reverse();
+  spark("sparkPcs", asc.map(d => +d.total_pcs), "var(--ink)", true);
+  spark("sparkProfit", asc.map(d => +d.profit), "var(--green)", false);
+
+  $("daysTable").innerHTML = days.length ? `
+    <thead><tr><th>Date</th><th>Pieces</th><th>Rate</th><th>Crew</th>
+      <th>Share</th><th>Payroll</th><th>Profit</th></tr></thead>
+    <tbody>${days.map(d => `<tr>
+      <td>${fmtDate(d.log_date)}</td>
+      <td class="n">${num(d.total_pcs)}</td>
+      <td class="n">${peso2(d.rate)}</td>
+      <td class="n">${num(d.headcount)}</td>
+      <td class="n">${peso(d.share_per_worker)}</td>
+      <td class="n">${peso(d.payroll)}</td>
+      <td class="n">${peso(d.profit)}</td></tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">No days yet. Enter one on the Today tab.</td></tr></tbody>`;
+}
+
+function spark(id, vals, color, line){
+  const svg = $(id);
+  if (!vals.length){ svg.innerHTML = ""; return; }
+  const W = 320, H = 90, P = 6;
+  const max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const span = (max - min) || 1;
+  const x = i => vals.length === 1 ? W/2 : P + i * (W - 2*P) / (vals.length - 1);
+  const y = v => H - P - ((v - min) / span) * (H - 2*P);
+  if (line){
+    const pts = vals.map((v,i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    svg.innerHTML =
+      `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5"
+        stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>` +
+      vals.map((v,i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="${color}"/>`).join("");
+  } else {
+    const bw = Math.max(4, (W - 2*P) / vals.length - 5);
+    svg.innerHTML = vals.map((v,i) => {
+      const top = y(v), base = y(Math.max(min,0));
+      return `<rect x="${(x(i)-bw/2).toFixed(1)}" y="${Math.min(top,base).toFixed(1)}"
+        width="${bw.toFixed(1)}" height="${Math.max(2,Math.abs(base-top)).toFixed(1)}"
+        rx="2" fill="${color}"/>`;
+    }).join("");
+  }
+}
+
+/* ================= PAY ================= */
+async function renderWeeks(){
+  const wk = await get("chb_week_totals?select=week_start&order=week_start.desc");
+  const cur = mondayOf(todayISO());
+  const list = [...new Set([cur, ...wk.map(w => w.week_start)])].sort().reverse();
+  $("weekPick").innerHTML = list.map(w => {
+    const end = new Date(w + "T00:00:00"); end.setDate(end.getDate() + 5);
+    return `<option value="${w}">${fmtDate(w)} – ${fmtDate(end.toLocaleDateString("en-CA"))}</option>`;
+  }).join("");
+  await renderPay();
+}
+$("weekPick").addEventListener("change", renderPay);
+
+async function renderPay(){
+  const wk = $("weekPick").value;
+  if (!wk) return;
+  const [pay, bale] = await Promise.all([
+    get(`chb_week_worker?select=*&week_start=eq.${wk}`),
+    get(`chb_bale_week?select=*&week_start=eq.${wk}`)
+  ]);
+  const bmap = Object.fromEntries(bale.map(b => [b.worker_id, b]));
+  const rows = workers.filter(w => pay.some(p => p.worker_id === w.id) || bmap[w.id]);
+  if (!rows.length){
+    $("payTable").innerHTML = `<tbody><tr><td class="empty">Nothing recorded for this week yet.</td></tr></tbody>`;
+    return;
+  }
+  const tot = {days:0, gross:0, ded:0, net:0};
+  const body = rows.map(w => {
+    const p = pay.find(x => x.worker_id === w.id) || {days:0, base_earned:0, commission:0, gross_pay:0};
+    const b = bmap[w.id] || {balance_before:0, taken:0, deducted:0};
+    const net = Number(p.gross_pay) - Number(b.deducted);
+    const remain = Number(b.balance_before) + Number(b.taken) - Number(b.deducted);
+    tot.days += Number(p.days); tot.gross += Number(p.gross_pay);
+    tot.ded += Number(b.deducted); tot.net += net;
+    return `<tr data-w="${w.id}">
+      <td>${esc(w.name)}</td>
+      <td class="n">${num(p.days)}</td>
+      <td class="n">${peso(p.base_earned)}</td>
+      <td class="n">${peso(p.commission)}</td>
+      <td class="n"><b>${peso(p.gross_pay)}</b></td>
+      <td class="n">${peso(b.balance_before)}</td>
+      <td class="noprint"><input type="number" class="bale-take" value="${Number(b.taken)||""}" placeholder="0" step="1"></td>
+      <td class="noprint"><input type="number" class="bale-ded" value="${Number(b.deducted)||""}" placeholder="0" step="1"></td>
+      <td class="n"><b>${peso(net)}</b></td>
+      <td class="n">${peso(remain)}</td>
+    </tr>`;
+  }).join("");
+
+  $("payTable").innerHTML = `
+    <thead><tr><th>Worker</th><th>Days</th><th>Base</th><th>Commission</th><th>Gross</th>
+      <th>Bale before</th><th class="noprint">New bale</th><th class="noprint">Deduct</th>
+      <th>Net pay</th><th>Bale left</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr class="total"><td>Total</td><td class="n">${num(tot.days)}</td><td></td><td></td>
+      <td class="n">${peso(tot.gross)}</td><td></td><td class="noprint"></td><td class="noprint"></td>
+      <td class="n">${peso(tot.net)}</td><td></td></tr></tfoot>`;
+
+  $("payTable").querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("change", async () => {
+      const tr = inp.closest("tr");
+      try{
+        await rpc("chb_save_bale", {
+          p_worker_id: Number(tr.dataset.w),
+          p_week: wk,
+          p_taken: +tr.querySelector(".bale-take").value || 0,
+          p_deducted: +tr.querySelector(".bale-ded").value || 0
+        });
+        await renderPay();
+        banner("Bale updated.", "ok");
+      }catch(e){ banner(e.message, "err"); }
+    });
+  });
+}
+$("printSlip").addEventListener("click", () => window.print());
+
+/* ================= CREW ================= */
+async function renderCrewTable(){
+  const p = await get("chb_promotion?select=*");
+  const order = {Driver:1, "Senior Extra":2, Senior:3, Junior:4};
+  p.sort((a,b) => (order[a.level]-order[b.level]) || a.name.localeCompare(b.name));
+  $("crewTable").innerHTML = `
+    <thead><tr><th>Worker</th><th>Level</th><th>Base</th><th>Days</th><th>To Senior</th></tr></thead>
+    <tbody>${p.map(w => `<tr>
+      <td>${esc(w.name)}</td><td>${esc(w.level)}</td>
+      <td class="n">${peso(w.base_pay)}</td>
+      <td class="n">${num(w.days_total)}</td>
+      <td class="n">${w.days_remaining === null ? "—" :
+        (Number(w.days_remaining) === 0 ? "ready" : num(w.days_remaining))}</td></tr>`).join("")}</tbody>`;
+}
+function renderWorkerPicker(){
+  $("w-pick").innerHTML = `<option value="">— new worker —</option>` +
+    workers.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join("");
+}
+$("w-pick").addEventListener("change", () => {
+  const w = workers.find(x => String(x.id) === $("w-pick").value);
+  $("w-name").value = w?.name ?? "";
+  $("w-level").value = w?.level ?? "Junior";
+  $("w-base").value = w?.base_pay ?? 200;
+  $("w-start").value = w?.start_date ?? "";
+  $("w-before").value = w?.days_before ?? 0;
+  $("w-active").value = String(w?.active ?? true);
+});
+$("saveWorker").addEventListener("click", async () => {
+  try{
+    if (!$("w-name").value.trim()) throw new Error("Give the worker a name.");
+    await rpc("chb_save_worker", {
+      p_id: $("w-pick").value ? Number($("w-pick").value) : null,
+      p_name: $("w-name").value.trim(),
+      p_level: $("w-level").value,
+      p_base: +$("w-base").value || 0,
+      p_start: $("w-start").value || null,
+      p_days_before: +$("w-before").value || 0,
+      p_active: $("w-active").value === "true"
+    });
+    workers = await get("chb_worker_list?select=*");
+    renderCrewChips(); renderWorkerPicker(); await renderCrewTable();
+    banner("Worker saved.", "ok");
+  }catch(e){ banner(e.message, "err"); }
+});
+
+/* ================= SETUP ================= */
+function renderTiers(){
+  $("tierTable").innerHTML = `
+    <thead><tr><th>From</th><th>To</th><th>Rate</th></tr></thead>
+    <tbody>${tiers.map((t,i) => `<tr data-i="${i}">
+      <td><input type="number" class="t-min" value="${t.min_pcs}"></td>
+      <td><input type="number" class="t-max" value="${t.max_pcs}"></td>
+      <td><input type="number" class="t-rate" value="${t.rate}" step="0.05"></td>
+    </tr>`).join("")}</tbody>`;
+}
+$("saveTiers").addEventListener("click", async () => {
+  try{
+    const rows = [...$("tierTable").querySelectorAll("tbody tr")].map(tr => ({
+      min_pcs:+tr.querySelector(".t-min").value,
+      max_pcs:+tr.querySelector(".t-max").value,
+      rate:+tr.querySelector(".t-rate").value
+    }));
+    await rpc("chb_save_tiers", {p: rows});
+    tiers = await get("chb_tier_list?select=*");
+    days = await get("chb_days?select=*&order=log_date.desc");
+    renderTiers(); renderBoard(); recalc();
+    banner("Tiers saved.", "ok");
+  }catch(e){ banner(e.message, "err"); }
+});
+function renderConfig(){
+  $("s-cement").value = cfg.cement_price;   $("s-gravel").value = cfg.gravel_per_pc;
+  $("s-util").value = cfg.utilities_per_pc; $("s-promo").value = cfg.promotion_days;
+  $("s-dnear").value = cfg.delivery_near;   $("s-dfar").value = cfg.delivery_far;
+  $("s-p4").value = cfg.price_chb4_pickup;  $("s-p5").value = cfg.price_chb5_pickup;
+  $("s-p4d").value = cfg.price_chb4_delivered; $("s-p5d").value = cfg.price_chb5_delivered;
+}
+$("saveConfig").addEventListener("click", async () => {
+  try{
+    await rpc("chb_save_config", {p:{
+      cement_price:+$("s-cement").value, gravel_per_pc:+$("s-gravel").value,
+      utilities_per_pc:+$("s-util").value, promotion_days:+$("s-promo").value,
+      delivery_near:+$("s-dnear").value, delivery_far:+$("s-dfar").value,
+      price_chb4_pickup:+$("s-p4").value, price_chb5_pickup:+$("s-p5").value,
+      price_chb4_delivered:+$("s-p4d").value, price_chb5_delivered:+$("s-p5d").value
+    }});
+    cfg = (await get("chb_config?select=*"))[0];
+    days = await get("chb_days?select=*&order=log_date.desc");
+    renderBoard(); await renderCrewTable();
+    banner("Settings saved.", "ok");
+  }catch(e){ banner(e.message, "err"); }
+});
+
+/* ================= navigation ================= */
+document.querySelectorAll("nav button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(x =>
+      x.setAttribute("aria-current", x === b ? "true" : "false"));
+    ["today","board","pay","crew","setup"].forEach(v =>
+      $("v-" + v).classList.toggle("hidden", v !== b.dataset.view));
+    window.scrollTo(0,0);
+  });
+});
+
+/* ================= start ================= */
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = $("loginBtn");
+  try{
+    btn.disabled = true; btn.textContent = "Signing in…";
+    $("loginMsg").innerHTML = "";
+    await signIn($("email").value.trim(), $("password").value);
+    await start();
+  }catch(err){
+    $("loginMsg").innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }finally{ btn.disabled = false; btn.textContent = "Sign in"; }
+});
+$("signout").addEventListener("click", signOut);
+
+async function start(){
+  $("login").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("whoami").textContent = session?.user?.email?.split("@")[0] ?? "";
+  $("d-date").value = todayISO();
+  await loadAll();
+  await loadDayInto($("d-date").value);
+}
+
+(async function boot(){
+  const saved = localStorage.getItem(LS);
+  if (saved){
+    session = JSON.parse(saved);
+    try{ await start(); }
+    catch{ if (await refresh()) { try{ await start(); }catch{ signOut(); } } else signOut(); }
+  }
+})();
+</script>
+</body>
+</html>
