@@ -61,8 +61,8 @@ nav{
   padding-bottom:env(safe-area-inset-bottom);
 }
 nav button{
-  flex:1;background:none;border:0;padding:9px 2px 8px;
-  font-size:11px;color:var(--slate);display:flex;flex-direction:column;
+  flex:1;background:none;border:0;padding:9px 1px 8px;
+  font-size:10px;color:var(--slate);display:flex;flex-direction:column;
   align-items:center;gap:3px;border-top:3px solid transparent;margin-top:-1px;
 }
 nav button .g{font-size:17px;line-height:1}
@@ -255,6 +255,13 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
     <section id="v-board" class="hidden">
       <h2>All time</h2>
       <div class="stats" id="kpis"></div>
+
+      <div class="panel">
+        <h2>Blocks made, delivered and left</h2>
+        <div style="overflow-x:auto"><table id="chbTable"></table></div>
+        <p class="hint" id="chbHint"></p>
+      </div>
+
       <div class="panel">
         <h2>Pieces per day</h2>
         <svg class="spark" id="sparkPcs" viewBox="0 0 320 90" preserveAspectRatio="none" role="img"
@@ -281,6 +288,43 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
       <div class="panel">
         <div style="overflow-x:auto"><table id="payTable"></table></div>
         <p class="hint">Net pay is what the worker receives. Bale remaining carries to next week.</p>
+      </div>
+    </section>
+
+    <!-- ---------- DELIVER ---------- -->
+    <section id="v-deliver" class="hidden">
+      <h2>Blocks left in the yard</h2>
+      <div class="stats" id="delCards"></div>
+
+      <h2>Record a delivery</h2>
+      <div class="panel">
+        <div class="row2">
+          <label class="f"><span>Date</span><input type="date" id="dl-date"></label>
+          <label class="f"><span>Type</span>
+            <select id="dl-type"><option value="sale">Sold to customer</option>
+              <option value="project">Delivered to project</option></select></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>CHB 4" pcs</span><input type="number" id="dl-q4" inputmode="numeric" min="0"></label>
+          <label class="f"><span>CHB 5" pcs</span><input type="number" id="dl-q5" inputmode="numeric" min="0"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>CHB 4" price</span><input type="number" id="dl-p4" step="0.01"></label>
+          <label class="f"><span>CHB 5" price</span><input type="number" id="dl-p5" step="0.01"></label>
+        </div>
+        <label class="f"><span id="dl-whoLbl">Customer</span><input type="text" id="dl-who"></label>
+        <label class="f"><span>Note</span><input type="text" id="dl-note"></label>
+        <div class="board-total" style="margin:4px 0 12px">
+          <div class="cap">This delivery</div>
+          <div class="fig num" id="dl-total" style="font-size:38px">0</div>
+          <div class="sub">pieces · value <b class="num" id="dl-value">₱0</b></div>
+        </div>
+        <button class="btn" id="saveDeliver">Save delivery</button>
+      </div>
+
+      <h2>Deliveries</h2>
+      <div class="panel">
+        <div style="overflow-x:auto"><table id="delTable"></table></div>
       </div>
     </section>
 
@@ -385,6 +429,7 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
     <button data-view="today" aria-current="true"><span class="g">✎</span>Today</button>
     <button data-view="board"><span class="g">▤</span>Board</button>
     <button data-view="pay"><span class="g">₱</span>Pay</button>
+    <button data-view="deliver"><span class="g">⇥</span>Deliver</button>
     <button data-view="stock"><span class="g">▦</span>Stock</button>
     <button data-view="crew"><span class="g">☰</span>Crew</button>
     <button data-view="setup"><span class="g">⚙</span>Setup</button>
@@ -490,6 +535,8 @@ async function loadAll(){
   materials = await get("chb_materials?select=*");
   renderMatPicker();
   await renderStock();
+  delDefaults(); delRecalc();
+  await renderDeliver();
   renderCrewChips();
   renderBoard();
   renderCrewTable();
@@ -748,6 +795,7 @@ $("saveDay").addEventListener("click", async () => {
       p_blocks: blockPayload
     });
     days = await get("chb_days?select=*&order=log_date.desc");
+    await renderStock();
     renderBoard(); renderCrewTable(); await renderWeeks();
     banner("Day saved.", "ok");
     $("saveHint").textContent = "Already saved. Editing will replace it.";
@@ -781,6 +829,8 @@ function renderBoard(){
     <div class="stat"><div class="k">Profit per block</div><div class="v num">${peso2(t.pcs ? t.pro/t.pcs : 0)}</div></div>
     <div class="stat"><div class="k">Labour per block</div><div class="v num">${peso2(t.pcs ? t.pay/t.pcs : 0)}</div></div>`;
 
+  renderChbTable();
+
   const asc = [...days].reverse();
   spark("sparkPcs", asc.map(d => +d.total_pcs), "var(--ink)", true);
   spark("sparkProfit", asc.map(d => +d.profit), "var(--green)", false);
@@ -797,6 +847,44 @@ function renderBoard(){
       <td class="n">${peso(d.payroll)}</td>
       <td class="n">${peso(d.profit)}</td></tr>`).join("")}</tbody>`
     : `<tbody><tr><td class="empty">No days yet. Enter one on the Today tab.</td></tr></tbody>`;
+}
+
+function renderChbTable(){
+  const row = code => stock.find(s => s.code === code) || {};
+  const r4 = row("CHB4"), r5 = row("CHB5");
+
+  // fall back to the production log if the stock sheet has not loaded yet
+  const made4 = Number(r4.produced ?? days.reduce((a,d) => a + Number(d.chb4_pcs), 0));
+  const made5 = Number(r5.produced ?? days.reduce((a,d) => a + Number(d.chb5), 0));
+  const open4 = Number(r4.opening || 0),  open5 = Number(r5.opening || 0);
+  const out4  = Number(r4.sold || 0) + Number(r4.to_project || 0);
+  const out5  = Number(r5.sold || 0) + Number(r5.to_project || 0);
+  const left4 = r4.on_hand !== undefined ? Number(r4.on_hand) : open4 + made4 - out4;
+  const left5 = r5.on_hand !== undefined ? Number(r5.on_hand) : open5 + made5 - out5;
+
+  const line = (label, open, made, out, left) => `<tr>
+    <td>${label}</td>
+    ${open ? `<td class="n">${num(open)}</td>` : `<td class="n">—</td>`}
+    <td class="n">${num(made)}</td>
+    <td class="n">${num(out)}</td>
+    <td class="n"><b>${num(left)}</b></td></tr>`;
+
+  $("chbTable").innerHTML = `
+    <thead><tr><th>Size</th><th>Opening</th><th>Produced</th><th>Delivered</th><th>Remaining</th></tr></thead>
+    <tbody>
+      ${line('CHB 4"', open4, made4, out4, left4)}
+      ${line('CHB 5"', open5, made5, out5, left5)}
+    </tbody>
+    <tfoot><tr class="total"><td>Total</td>
+      <td class="n">${(open4 + open5) ? num(open4 + open5) : "—"}</td>
+      <td class="n">${num(made4 + made5)}</td>
+      <td class="n">${num(out4 + out5)}</td>
+      <td class="n">${num(left4 + left5)}</td></tr></tfoot>`;
+
+  const shipped = out4 + out5, built = made4 + made5;
+  $("chbHint").textContent = shipped === 0
+    ? "No deliveries recorded yet — everything made is still counted as stock."
+    : `${Math.round(shipped / built * 100)}% of what you have made has left the yard.`;
 }
 
 function spark(id, vals, color, line){
@@ -899,6 +987,118 @@ async function renderPay(){
 }
 $("printSlip").addEventListener("click", () => window.print());
 
+/* ================= DELIVER ================= */
+let deliveries = [];
+
+function delDefaults(){
+  $("dl-date").value = todayISO();
+  const pick = $("dl-type").value === "project";
+  $("dl-p4").value = cfg ? cfg.price_chb4_pickup : "";
+  $("dl-p5").value = cfg ? cfg.price_chb5_pickup : "";
+  $("dl-whoLbl").textContent = pick ? "Project" : "Customer";
+}
+$("dl-type").addEventListener("change", () => {
+  $("dl-whoLbl").textContent = $("dl-type").value === "project" ? "Project" : "Customer";
+});
+
+function delRecalc(){
+  const q4 = +$("dl-q4").value || 0, q5 = +$("dl-q5").value || 0;
+  const v = q4 * (+$("dl-p4").value || 0) + q5 * (+$("dl-p5").value || 0);
+  $("dl-total").textContent = num(q4 + q5);
+  $("dl-value").textContent = peso(v);
+}
+["dl-q4","dl-q5","dl-p4","dl-p5"].forEach(id => $(id).addEventListener("input", delRecalc));
+
+async function renderDeliver(){
+  const rows = await get(
+    "chb_stock_ledger?select=*&material=in.(CHB4,CHB5)&reason=in.(sale,project)" +
+    "&order=move_date.desc&limit=120");
+  deliveries = rows;
+
+  const bal = c => stock.find(s => s.code === c) || {};
+  const b4 = bal("CHB4"), b5 = bal("CHB5");
+  const out = (r) => Number(r.sold || 0) + Number(r.to_project || 0);
+  $("delCards").innerHTML = `
+    <div class="stat"><div class="k">CHB 4" left</div><div class="v num">${num(b4.on_hand)}</div></div>
+    <div class="stat"><div class="k">CHB 5" left</div><div class="v num">${num(b5.on_hand)}</div></div>
+    <div class="stat"><div class="k">Delivered so far</div>
+      <div class="v num">${num(out(b4) + out(b5))}</div></div>
+    <div class="stat good"><div class="k">Sales value</div>
+      <div class="v num">${peso(Number(b4.sales_value || 0) + Number(b5.sales_value || 0))}</div></div>`;
+
+  // one delivery can cover both sizes — group by date + who + type
+  const groups = {};
+  rows.forEach(r => {
+    const k = `${r.move_date}|${r.party || ""}|${r.reason}`;
+    groups[k] = groups[k] || {date:r.move_date, party:r.party, reason:r.reason,
+                             q4:0, q5:0, amount:0, ids:[], note:r.note};
+    const g = groups[k];
+    if (r.material === "CHB4") g.q4 += Number(r.qty); else g.q5 += Number(r.qty);
+    g.amount += Number(r.amount || 0);
+    if (!String(r.id).includes("-")) g.ids.push(Number(r.id));
+  });
+  const list = Object.values(groups)
+    .sort((a,b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  $("delTable").innerHTML = list.length ? `
+    <thead><tr><th>Date</th><th>Who</th><th>Type</th><th>CHB 4"</th><th>CHB 5"</th>
+      <th>Total</th><th>Value</th><th class="noprint"></th></tr></thead>
+    <tbody>${list.map(g => `<tr>
+      <td>${fmtDate(g.date)}</td>
+      <td>${esc(g.party || "—")}</td>
+      <td>${g.reason === "project" ? "Project" : "Sold"}</td>
+      <td class="n">${g.q4 ? num(g.q4) : ""}</td>
+      <td class="n">${g.q5 ? num(g.q5) : ""}</td>
+      <td class="n"><b>${num(g.q4 + g.q5)}</b></td>
+      <td class="n">${g.amount ? peso(g.amount) : ""}</td>
+      <td class="noprint">${g.ids.length ?
+        `<button class="btn ghost sm" style="padding:4px 8px" data-del='${g.ids.join(",")}'>delete</button>` : ""}</td>
+    </tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">No deliveries recorded yet.</td></tr></tbody>`;
+
+  $("delTable").querySelectorAll("[data-del]").forEach(b => {
+    b.addEventListener("click", async () => {
+      if (!confirm("Delete this delivery?")) return;
+      try{
+        for (const id of b.dataset.del.split(",")) await rpc("chb_delete_move", {p_id: Number(id)});
+        await renderStock(); await renderDeliver(); renderBoard();
+        banner("Delivery deleted.", "ok");
+      }catch(e){ banner(e.message, "err"); }
+    });
+  });
+}
+
+$("saveDeliver").addEventListener("click", async () => {
+  const btn = $("saveDeliver");
+  try{
+    const q4 = +$("dl-q4").value || 0, q5 = +$("dl-q5").value || 0;
+    if (!q4 && !q5) throw new Error("Enter how many pieces went out.");
+    if (!$("dl-date").value) throw new Error("Pick a date.");
+
+    const b4 = stock.find(s => s.code === "CHB4") || {};
+    const b5 = stock.find(s => s.code === "CHB5") || {};
+    if (q4 > Number(b4.on_hand || 0) || q5 > Number(b5.on_hand || 0)){
+      if (!confirm(`That is more than the yard holds (CHB4 ${num(b4.on_hand)}, CHB5 ${num(b5.on_hand)}).\nSave anyway?`)) return;
+    }
+
+    btn.disabled = true; btn.textContent = "Saving…";
+    const common = {
+      p_id: null, p_date: $("dl-date").value, p_reason: $("dl-type").value,
+      p_party: $("dl-who").value, p_note: $("dl-note").value
+    };
+    if (q4) await rpc("chb_save_move", {...common, p_material:"CHB4", p_qty:q4,
+                       p_price: $("dl-p4").value === "" ? null : +$("dl-p4").value});
+    if (q5) await rpc("chb_save_move", {...common, p_material:"CHB5", p_qty:q5,
+                       p_price: $("dl-p5").value === "" ? null : +$("dl-p5").value});
+
+    $("dl-q4").value = ""; $("dl-q5").value = ""; $("dl-who").value = ""; $("dl-note").value = "";
+    delRecalc();
+    await renderStock(); await renderDeliver(); renderBoard();
+    banner("Delivery saved.", "ok");
+  }catch(e){ banner(e.message, "err"); }
+  finally{ btn.disabled = false; btn.textContent = "Save delivery"; }
+});
+
 /* ================= STOCK ================= */
 const REASONS = {
   raw:  [["opening","Opening stock"],["purchase","Purchase in"],["consumption","Used for CHB"],
@@ -909,7 +1109,7 @@ const REASONS = {
 const isCHB = code => code === "CHB4" || code === "CHB5";
 
 function renderMatPicker(){
-  $("m-mat").innerHTML = materials.map(m =>
+  $("m-mat").innerHTML = materials.filter(m => !isCHB(m.code)).map(m =>
     `<option value="${m.code}">${esc(m.name)}</option>`).join("");
   $("m-date").value = todayISO();
   syncReasons();
@@ -971,7 +1171,8 @@ async function renderStock(){
       if (!confirm("Delete this movement?")) return;
       try{
         await rpc("chb_delete_move", {p_id: Number(b.dataset.del)});
-        await renderStock(); banner("Movement deleted.", "ok");
+        await renderStock(); await renderDeliver(); renderBoard();
+        banner("Movement deleted.", "ok");
       }catch(e){ banner(e.message, "err"); }
     });
   });
@@ -996,6 +1197,8 @@ $("saveMove").addEventListener("click", async () => {
     });
     $("m-qty").value = ""; $("m-price").value = ""; $("m-party").value = ""; $("m-note").value = "";
     await renderStock();
+    await renderDeliver();
+    renderBoard();
     banner("Movement saved.", "ok");
   }catch(e){ banner(e.message, "err"); }
   finally{ btn.disabled = false; btn.textContent = "Save movement"; }
@@ -1100,7 +1303,7 @@ document.querySelectorAll("nav button").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach(x =>
       x.setAttribute("aria-current", x === b ? "true" : "false"));
-    ["today","board","pay","stock","crew","setup"].forEach(v =>
+    ["today","board","pay","deliver","stock","crew","setup"].forEach(v =>
       $("v-" + v).classList.toggle("hidden", v !== b.dataset.view));
     window.scrollTo(0,0);
   });
