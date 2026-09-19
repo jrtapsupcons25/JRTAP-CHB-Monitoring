@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1C1F26">
 <title>JRTAP CHB Board</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JRTAP CHB">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
 :root{
   --board:#FAFAF8;
@@ -108,6 +115,27 @@ input[type=number]{font-family:var(--num);font-variant-numeric:tabular-nums}
 .chip.on{border-color:var(--ink)}
 .chip.half .seg button[aria-pressed="true"]{background:var(--amber);border-color:var(--amber)}
 
+/* ---------- day blocks ---------- */
+.blk{border:1px solid var(--hair);border-radius:9px;padding:10px;margin-bottom:9px;background:var(--panel)}
+.blk.bad{border-color:var(--red)}
+.blkhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.blkhead .lab{font-size:12px;font-weight:650;color:var(--slate);white-space:nowrap}
+.blkhead input{max-width:96px;padding:8px 9px;text-align:right}
+.blkhead .u{font-size:12px;color:var(--slate)}
+.blkhead .x{margin-left:auto;background:none;border:0;color:var(--slate);font-size:18px;padding:0 4px;line-height:1}
+.mini{display:flex;flex-wrap:wrap;gap:5px}
+.mini button{
+  border:1px solid var(--hair);background:var(--board);border-radius:20px;
+  padding:5px 11px;font-size:12px;color:var(--slate);
+}
+.mini button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.blkinfo{font-size:12px;color:var(--slate);margin-top:7px}
+.blkinfo b{color:var(--ink)}
+.tally{font-size:13px;font-weight:650;margin:2px 0 10px}
+.tally.ok{color:var(--green)} .tally.bad{color:var(--red)}
+.switch{display:flex;align-items:center;gap:9px;margin-bottom:10px;font-size:14px}
+.switch input{width:auto;transform:scale(1.25);margin:0}
+
 /* ---------- buttons ---------- */
 .btn{
   display:block;width:100%;padding:14px;border:0;border-radius:9px;
@@ -204,7 +232,19 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
 
       <h2>Who worked</h2>
       <div class="panel">
-        <div class="crew" id="crew"></div>
+        <label class="switch"><input type="checkbox" id="splitOn">
+          <span>Split the day — someone left or joined partway</span></label>
+
+        <div id="wholeDay">
+          <div class="crew" id="crew"></div>
+        </div>
+
+        <div id="blockWrap" class="hidden">
+          <p class="hint" style="margin:0 0 9px">Enter the piece count for each stretch of the day, and tap who was there.</p>
+          <div id="blocks"></div>
+          <div class="tally" id="tally"></div>
+          <button class="btn ghost sm" id="addBlock">Add another block</button>
+        </div>
       </div>
 
       <button class="btn" id="saveDay">Save day</button>
@@ -241,6 +281,38 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
       <div class="panel">
         <div style="overflow-x:auto"><table id="payTable"></table></div>
         <p class="hint">Net pay is what the worker receives. Bale remaining carries to next week.</p>
+      </div>
+    </section>
+
+    <!-- ---------- STOCK ---------- -->
+    <section id="v-stock" class="hidden">
+      <h2>On hand</h2>
+      <div class="stats" id="stockCards"></div>
+
+      <h2>Record a movement</h2>
+      <div class="panel">
+        <div class="row2">
+          <label class="f"><span>Date</span><input type="date" id="m-date"></label>
+          <label class="f"><span>Material</span><select id="m-mat"></select></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Reason</span><select id="m-reason"></select></label>
+          <label class="f"><span>Quantity <em id="m-unit" style="font-style:normal;color:var(--slate)"></em></span>
+            <input type="number" id="m-qty" inputmode="decimal" step="0.001" min="0"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>Price per unit</span><input type="number" id="m-price" inputmode="decimal" step="0.01"></label>
+          <label class="f"><span id="m-partyLbl">Supplier</span><input type="text" id="m-party"></label>
+        </div>
+        <label class="f"><span>Note</span><input type="text" id="m-note"></label>
+        <button class="btn sm" id="saveMove">Save movement</button>
+        <p class="hint" id="m-hint"></p>
+      </div>
+
+      <h2>Recent movements</h2>
+      <div class="panel">
+        <div style="overflow-x:auto"><table id="moveTable"></table></div>
+        <p class="hint">Production and cement use come straight from the daily board and cannot be edited here.</p>
       </div>
     </section>
 
@@ -289,6 +361,10 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
           <label class="f"><span>Promotion days</span><input type="number" id="s-promo"></label>
         </div>
         <div class="row2">
+          <label class="f"><span>Aggregate cu.m per 1,000 pcs</span><input type="number" id="s-agg" step="0.001"></label>
+          <span></span>
+        </div>
+        <div class="row2">
           <label class="f"><span>Delivery near</span><input type="number" id="s-dnear" step="0.01"></label>
           <label class="f"><span>Delivery far</span><input type="number" id="s-dfar" step="0.01"></label>
         </div>
@@ -309,6 +385,7 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
     <button data-view="today" aria-current="true"><span class="g">✎</span>Today</button>
     <button data-view="board"><span class="g">▤</span>Board</button>
     <button data-view="pay"><span class="g">₱</span>Pay</button>
+    <button data-view="stock"><span class="g">▦</span>Stock</button>
     <button data-view="crew"><span class="g">☰</span>Crew</button>
     <button data-view="setup"><span class="g">⚙</span>Setup</button>
   </nav>
@@ -323,6 +400,8 @@ const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZ
 const LS = "jrtap_chb_session";
 
 let session = null, workers = [], days = [], cfg = null, tiers = [], attendance = {};
+let materials = [], stock = [], moves = [];
+let blocks = [];   // [{pcs, label, crew:{worker_id:share}}]
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -408,6 +487,9 @@ async function loadAll(){
     get("chb_tier_list?select=*")
   ]);
   cfg = cfg[0];
+  materials = await get("chb_materials?select=*");
+  renderMatPicker();
+  await renderStock();
   renderCrewChips();
   renderBoard();
   renderCrewTable();
@@ -471,22 +553,155 @@ function recalc(){
   $("t-hc").textContent = num(hc);
   $("t-share").textContent = hc ? peso2(pcs * rate / hc) : "₱0";
 }
-["d-a","d-b","d-c5"].forEach(id => $(id).addEventListener("input", recalc));
+["d-a","d-b","d-c5"].forEach(id => $(id).addEventListener("input", () => { recalc(); updateTally(); }));
+
+/* ---------- split the day into blocks ---------- */
+const dayPcs = () => (+$("d-a").value || 0) + (+$("d-b").value || 0) + (+$("d-c5").value || 0);
+const blockCrewCount = b => Object.values(b.crew).reduce((a,v) => a + Number(v || 0), 0);
+
+function activeWorkers(){ return workers.filter(w => w.active); }
+
+function newBlock(copyFrom){
+  return {
+    pcs: null,
+    label: "",
+    crew: copyFrom ? {...copyFrom.crew}
+                   : Object.fromEntries(activeWorkers().map(w => [w.id, 1]))
+  };
+}
+
+function renderBlocks(){
+  const total = dayPcs();
+  $("blocks").innerHTML = blocks.map((b, i) => {
+    const crew = blockCrewCount(b);
+    const pcs = Number(b.pcs) || 0;
+    const share = crew ? (pcs * rateFor(total) / crew) : 0;
+    return `<div class="blk" data-i="${i}">
+      <div class="blkhead">
+        <span class="lab">Block ${i + 1}</span>
+        <input type="number" inputmode="numeric" min="0" class="b-pcs"
+               value="${b.pcs ?? ""}" placeholder="0">
+        <span class="u">pcs</span>
+        ${blocks.length > 1 ? `<button type="button" class="x" title="remove">×</button>` : ""}
+      </div>
+      <div class="mini">
+        ${activeWorkers().map(w => {
+          const s = Number(b.crew[w.id] ?? 0);
+          return `<button type="button" data-w="${w.id}" aria-pressed="${s > 0}">${esc(w.name)}</button>`;
+        }).join("")}
+      </div>
+      <div class="blkinfo">crew <b>${num(crew)}</b> · each earns <b>${peso2(share)}</b></div>
+    </div>`;
+  }).join("");
+
+  $("blocks").querySelectorAll(".blk").forEach(el => {
+    const i = +el.dataset.i;
+    el.querySelector(".b-pcs").addEventListener("input", e => {
+      blocks[i].pcs = e.target.value === "" ? null : +e.target.value;
+      updateTally();
+    });
+    const x = el.querySelector(".x");
+    if (x) x.addEventListener("click", () => { blocks.splice(i, 1); renderBlocks(); });
+    el.querySelectorAll(".mini button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.w;
+        blocks[i].crew[id] = Number(blocks[i].crew[id] ?? 0) > 0 ? 0 : 1;
+        renderBlocks();
+      });
+    });
+  });
+  updateTally();
+}
+
+function updateTally(){
+  const total = dayPcs();
+  const sum = blocks.reduce((a, b) => a + (Number(b.pcs) || 0), 0);
+  const diff = total - sum;
+  const el = $("tally");
+  if (!el) return;
+  if (diff === 0 && total > 0){
+    el.className = "tally ok";
+    el.textContent = `Blocks add up to ${num(total)} pieces.`;
+  } else {
+    el.className = "tally bad";
+    el.textContent = total === 0
+      ? "Enter the day's column totals first."
+      : `${num(sum)} of ${num(total)} — ${diff > 0 ? num(diff) + " still to assign" : num(-diff) + " too many"}.`;
+  }
+  // live per-block figures follow the day total (tier rate can change)
+  $("blocks").querySelectorAll(".blk").forEach(el2 => {
+    const b = blocks[+el2.dataset.i];
+    const crew = blockCrewCount(b);
+    const share = crew ? ((Number(b.pcs) || 0) * rateFor(total) / crew) : 0;
+    el2.querySelector(".blkinfo").innerHTML =
+      `crew <b>${num(crew)}</b> · each earns <b>${peso2(share)}</b>`;
+    el2.classList.toggle("bad", diff !== 0);
+  });
+}
+
+$("splitOn").addEventListener("change", () => {
+  const on = $("splitOn").checked;
+  $("wholeDay").classList.toggle("hidden", on);
+  $("blockWrap").classList.toggle("hidden", !on);
+  if (on && blocks.length === 0){
+    const first = newBlock();
+    first.crew = {...attendance};
+    blocks = [first, newBlock(first)];
+    const t = dayPcs();
+    if (t) blocks[0].pcs = t;
+    blocks[1].pcs = 0;
+  }
+  renderBlocks();
+});
+
+$("addBlock").addEventListener("click", () => {
+  blocks.push(newBlock(blocks[blocks.length - 1]));
+  renderBlocks();
+});
 
 async function loadDayInto(iso){
   const d = days.find(x => x.log_date === iso);
   if (!d){
     $("d-a").value = $("d-b").value = $("d-c5").value = $("d-cem").value = "";
     $("d-sale").value = "Pickup";
+    blocks = [];
+    $("splitOn").checked = false;
+    $("wholeDay").classList.remove("hidden");
+    $("blockWrap").classList.add("hidden");
     setAttendance(Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 1])));
     $("saveHint").textContent = "New day.";
     return;
   }
   $("d-a").value = d.chb4_a; $("d-b").value = d.chb4_b; $("d-c5").value = d.chb5;
   $("d-cem").value = d.cement_bags ?? ""; $("d-sale").value = d.sale_type;
-  const rows = await get(`chb_worker_day?select=worker_id,share&log_date=eq.${iso}`);
+  const rows = await get(`chb_day_blocks?select=*&log_date=eq.${iso}&order=seq`);
+  const bySeq = {};
+  rows.forEach(r => {
+    bySeq[r.seq] = bySeq[r.seq] || {pcs:Number(r.pcs), label:r.label || "", crew:{}};
+    if (r.worker_id) bySeq[r.seq].crew[r.worker_id] = Number(r.share);
+  });
+  const seqs = Object.keys(bySeq).map(Number).sort((a,b) => a - b);
+
+  if (seqs.length > 1){
+    blocks = seqs.map(s => bySeq[s]);
+    $("splitOn").checked = true;
+    $("wholeDay").classList.add("hidden");
+    $("blockWrap").classList.remove("hidden");
+    const map = Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 0]));
+    blocks.forEach(b => Object.keys(b.crew).forEach(id => map[id] = 1));
+    setAttendance(map);
+    renderBlocks();
+    $("saveHint").textContent = `Saved with ${seqs.length} blocks. Editing will replace it.`;
+    return;
+  }
+
+  blocks = [];
+  $("splitOn").checked = false;
+  $("wholeDay").classList.remove("hidden");
+  $("blockWrap").classList.add("hidden");
   const map = Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 0]));
-  rows.forEach(r => map[r.worker_id] = Number(r.share));
+  const only = bySeq[seqs[0]] || {crew:{}};
+  Object.entries(only.crew).forEach(([id, s]) => map[id] = Number(s));
   setAttendance(map);
   $("saveHint").textContent = "Already saved. Editing will replace it.";
 }
@@ -496,10 +711,32 @@ $("saveDay").addEventListener("click", async () => {
   const btn = $("saveDay");
   try{
     btn.disabled = true; btn.textContent = "Saving…";
-    const list = Object.entries(attendance)
-      .filter(([,s]) => Number(s) > 0)
-      .map(([worker_id, share]) => ({worker_id:Number(worker_id), share:Number(share)}));
-    if (!list.length) throw new Error("Mark at least one worker present.");
+    const split = $("splitOn").checked;
+    let list = [], blockPayload = null;
+
+    if (split){
+      const total = dayPcs();
+      const sum = blocks.reduce((a,b) => a + (Number(b.pcs) || 0), 0);
+      if (sum !== total) throw new Error(`Blocks add up to ${num(sum)} but the day is ${num(total)}.`);
+      blocks.forEach((b,i) => {
+        if (!blockCrewCount(b)) throw new Error(`Block ${i+1} has nobody in it.`);
+      });
+      blockPayload = blocks
+        .filter(b => Number(b.pcs) > 0)
+        .map(b => ({
+          pcs: Number(b.pcs),
+          label: b.label || "",
+          crew: Object.entries(b.crew).filter(([,s]) => Number(s) > 0)
+                  .map(([worker_id, share]) => ({worker_id:Number(worker_id), share:Number(share)}))
+        }));
+      if (!blockPayload.length) throw new Error("Give at least one block a piece count.");
+    } else {
+      list = Object.entries(attendance)
+        .filter(([,s]) => Number(s) > 0)
+        .map(([worker_id, share]) => ({worker_id:Number(worker_id), share:Number(share)}));
+      if (!list.length) throw new Error("Mark at least one worker present.");
+    }
+
     await rpc("chb_save_day", {
       p_date: $("d-date").value,
       p_a: +$("d-a").value || 0,
@@ -507,7 +744,8 @@ $("saveDay").addEventListener("click", async () => {
       p_c5: +$("d-c5").value || 0,
       p_cement: $("d-cem").value === "" ? null : +$("d-cem").value,
       p_sale: $("d-sale").value,
-      p_attendance: list
+      p_attendance: list,
+      p_blocks: blockPayload
     });
     days = await get("chb_days?select=*&order=log_date.desc");
     renderBoard(); renderCrewTable(); await renderWeeks();
@@ -661,6 +899,108 @@ async function renderPay(){
 }
 $("printSlip").addEventListener("click", () => window.print());
 
+/* ================= STOCK ================= */
+const REASONS = {
+  raw:  [["opening","Opening stock"],["purchase","Purchase in"],["consumption","Used for CHB"],
+         ["sale","Sold"],["project","Delivered to project"],["adjust","Adjustment"]],
+  chb:  [["opening","Opening stock"],["sale","Sold"],["project","Delivered to project"],
+         ["adjust","Adjustment"]]
+};
+const isCHB = code => code === "CHB4" || code === "CHB5";
+
+function renderMatPicker(){
+  $("m-mat").innerHTML = materials.map(m =>
+    `<option value="${m.code}">${esc(m.name)}</option>`).join("");
+  $("m-date").value = todayISO();
+  syncReasons();
+}
+function syncReasons(){
+  const code = $("m-mat").value;
+  const m = materials.find(x => x.code === code);
+  $("m-unit").textContent = m ? `(${m.unit})` : "";
+  const list = isCHB(code) ? REASONS.chb : REASONS.raw;
+  $("m-reason").innerHTML = list.map(([v,l]) => `<option value="${v}">${esc(l)}</option>`).join("");
+  syncParty();
+  $("m-hint").textContent = isCHB(code)
+    ? "Blocks made are counted automatically from the daily board."
+    : (code === "CEMENT" ? "Bags used are counted automatically from the daily board."
+                         : "Usage is estimated from the rate you set under Setup.");
+}
+function syncParty(){
+  const r = $("m-reason").value;
+  $("m-partyLbl").textContent = r === "purchase" ? "Supplier"
+    : (r === "sale" ? "Customer" : (r === "project" ? "Project" : "Reference"));
+}
+$("m-mat").addEventListener("change", syncReasons);
+$("m-reason").addEventListener("change", syncParty);
+
+async function renderStock(){
+  [stock, moves] = await Promise.all([
+    get("chb_stock_balance?select=*"),
+    get("chb_stock_ledger?select=*&order=move_date.desc&limit=40")
+  ]);
+
+  $("stockCards").innerHTML = stock.map(s => {
+    const low = Number(s.on_hand) < 0;
+    return `<div class="stat ${low ? "warn" : ""}">
+      <div class="k">${esc(s.name)}</div>
+      <div class="v num">${num(s.on_hand)} <span style="font-size:12px;font-weight:400;color:var(--slate)">${esc(s.unit)}</span></div>
+    </div>`;
+  }).join("");
+
+  const label = {opening:"Opening", purchase:"Purchase", production:"Produced",
+                 consumption:"Used", sale:"Sold", project:"To project", adjust:"Adjusted"};
+  $("moveTable").innerHTML = moves.length ? `
+    <thead><tr><th>Date</th><th>Material</th><th>Reason</th><th>Qty</th>
+      <th>Value</th><th>Who</th><th class="noprint"></th></tr></thead>
+    <tbody>${moves.map(m => `<tr>
+      <td>${fmtDate(m.move_date)}</td>
+      <td>${esc(m.material_name)}</td>
+      <td>${esc(label[m.reason] || m.reason)}</td>
+      <td class="n" style="color:${Number(m.dir) > 0 ? "var(--green)" : "var(--ink)"}">
+        ${Number(m.dir) > 0 ? "+" : "−"}${num(m.qty)}</td>
+      <td class="n">${Number(m.amount) ? peso(m.amount) : ""}</td>
+      <td>${esc(m.party || "")}</td>
+      <td class="noprint">${m.derived ? "" :
+        `<button class="btn ghost sm" style="padding:4px 8px" data-del="${m.id}">delete</button>`}</td>
+    </tr>`).join("")}</tbody>`
+    : `<tbody><tr><td class="empty">No movements yet.</td></tr></tbody>`;
+
+  $("moveTable").querySelectorAll("[data-del]").forEach(b => {
+    b.addEventListener("click", async () => {
+      if (!confirm("Delete this movement?")) return;
+      try{
+        await rpc("chb_delete_move", {p_id: Number(b.dataset.del)});
+        await renderStock(); banner("Movement deleted.", "ok");
+      }catch(e){ banner(e.message, "err"); }
+    });
+  });
+}
+
+$("saveMove").addEventListener("click", async () => {
+  const btn = $("saveMove");
+  try{
+    const qty = +$("m-qty").value;
+    if (!(qty > 0)) throw new Error("Enter a quantity.");
+    if (!$("m-date").value) throw new Error("Pick a date.");
+    btn.disabled = true; btn.textContent = "Saving…";
+    await rpc("chb_save_move", {
+      p_id: null,
+      p_date: $("m-date").value,
+      p_material: $("m-mat").value,
+      p_reason: $("m-reason").value,
+      p_qty: qty,
+      p_price: $("m-price").value === "" ? null : +$("m-price").value,
+      p_party: $("m-party").value,
+      p_note: $("m-note").value
+    });
+    $("m-qty").value = ""; $("m-price").value = ""; $("m-party").value = ""; $("m-note").value = "";
+    await renderStock();
+    banner("Movement saved.", "ok");
+  }catch(e){ banner(e.message, "err"); }
+  finally{ btn.disabled = false; btn.textContent = "Save movement"; }
+});
+
 /* ================= CREW ================= */
 async function renderCrewTable(){
   const p = await get("chb_promotion?select=*");
@@ -733,6 +1073,7 @@ $("saveTiers").addEventListener("click", async () => {
 function renderConfig(){
   $("s-cement").value = cfg.cement_price;   $("s-gravel").value = cfg.gravel_per_pc;
   $("s-util").value = cfg.utilities_per_pc; $("s-promo").value = cfg.promotion_days;
+  $("s-agg").value = cfg.aggregate_cum_per_1000;
   $("s-dnear").value = cfg.delivery_near;   $("s-dfar").value = cfg.delivery_far;
   $("s-p4").value = cfg.price_chb4_pickup;  $("s-p5").value = cfg.price_chb5_pickup;
   $("s-p4d").value = cfg.price_chb4_delivered; $("s-p5d").value = cfg.price_chb5_delivered;
@@ -742,13 +1083,14 @@ $("saveConfig").addEventListener("click", async () => {
     await rpc("chb_save_config", {p:{
       cement_price:+$("s-cement").value, gravel_per_pc:+$("s-gravel").value,
       utilities_per_pc:+$("s-util").value, promotion_days:+$("s-promo").value,
+      aggregate_cum_per_1000:+$("s-agg").value,
       delivery_near:+$("s-dnear").value, delivery_far:+$("s-dfar").value,
       price_chb4_pickup:+$("s-p4").value, price_chb5_pickup:+$("s-p5").value,
       price_chb4_delivered:+$("s-p4d").value, price_chb5_delivered:+$("s-p5d").value
     }});
     cfg = (await get("chb_config?select=*"))[0];
     days = await get("chb_days?select=*&order=log_date.desc");
-    renderBoard(); await renderCrewTable();
+    renderBoard(); await renderCrewTable(); await renderStock();
     banner("Settings saved.", "ok");
   }catch(e){ banner(e.message, "err"); }
 });
@@ -758,7 +1100,7 @@ document.querySelectorAll("nav button").forEach(b => {
   b.addEventListener("click", () => {
     document.querySelectorAll("nav button").forEach(x =>
       x.setAttribute("aria-current", x === b ? "true" : "false"));
-    ["today","board","pay","crew","setup"].forEach(v =>
+    ["today","board","pay","stock","crew","setup"].forEach(v =>
       $("v-" + v).classList.toggle("hidden", v !== b.dataset.view));
     window.scrollTo(0,0);
   });
