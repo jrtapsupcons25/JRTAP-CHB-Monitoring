@@ -209,7 +209,20 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
     <section id="v-today">
       <h2>Enter the board</h2>
       <div class="panel">
-        <label class="f"><span>Date</span><input type="date" id="d-date"></label>
+        <div class="row2">
+          <label class="f"><span>Date</span><input type="date" id="d-date"></label>
+          <label class="f"><span>Type of day</span>
+            <select id="d-type">
+              <option value="production">Production</option>
+              <option value="delivery">Delivery only</option>
+            </select></label>
+        </div>
+        <div id="flatWrap" class="hidden">
+          <label class="f"><span>Day rate per head</span>
+            <input type="number" id="d-flat" inputmode="decimal" step="1" value="600"></label>
+          <p class="hint">No blocks made. Everyone present gets this flat rate instead of their usual base, and no commission.</p>
+        </div>
+        <div id="prodFields">
         <span class="f"><span style="display:block;font-size:12px;color:var(--slate);margin-bottom:4px">Column totals</span></span>
         <div class="row3">
           <label class="f"><span>CHB4 col-1</span><input type="number" id="d-a" inputmode="numeric" min="0"></label>
@@ -221,9 +234,10 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
           <label class="f"><span>Sale</span>
             <select id="d-sale"><option>Pickup</option><option>Near</option><option>Far</option></select></label>
         </div>
+        </div>
       </div>
 
-      <div class="board-total">
+      <div class="board-total" id="prodTotal">
         <div class="cap">Total pieces</div>
         <div class="fig num" id="t-total">0</div>
         <div class="sub">rate <b class="num" id="t-rate">—</b> · crew <b class="num" id="t-hc">0</b>
@@ -245,6 +259,12 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
           <div class="tally" id="tally"></div>
           <button class="btn ghost sm" id="addBlock">Add another block</button>
         </div>
+      </div>
+
+      <h2>Office staff</h2>
+      <div class="panel">
+        <p class="hint" style="margin:0 0 8px">Daily wage only — not part of the CHB commission.</p>
+        <div class="crew" id="staffChips"></div>
       </div>
 
       <button class="btn" id="saveDay">Save day</button>
@@ -372,7 +392,7 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
         <label class="f"><span>Name</span><input type="text" id="w-name"></label>
         <div class="row2">
           <label class="f"><span>Level</span><select id="w-level">
-            <option>Driver</option><option>Senior Extra</option><option>Senior</option><option>Junior</option>
+            <option>Driver</option><option>Senior Extra</option><option>Senior</option><option>Junior</option><option>Staff</option>
           </select></label>
           <label class="f"><span>Base pay</span><input type="number" id="w-base" inputmode="decimal"></label>
         </div>
@@ -380,6 +400,7 @@ td input{padding:6px 7px;font-size:14px;text-align:right;max-width:88px}
           <label class="f"><span>Started</span><input type="date" id="w-start"></label>
           <label class="f"><span>Days before app</span><input type="number" id="w-before" inputmode="decimal" step="0.5"></label>
         </div>
+        <label class="f"><span>Role (staff only)</span><input type="text" id="w-role" placeholder="e.g. Sales Staff"></label>
         <label class="f"><span>Status</span><select id="w-active">
           <option value="true">Active</option><option value="false">Inactive</option></select></label>
         <button class="btn sm" id="saveWorker">Save worker</button>
@@ -446,7 +467,10 @@ const LS = "jrtap_chb_session";
 
 let session = null, workers = [], days = [], cfg = null, tiers = [], attendance = {};
 let materials = [], stock = [], moves = [];
-let blocks = [];   // [{pcs, label, crew:{worker_id:share}}]
+let blocks = [];
+let staffAtt = {};   // worker_id -> 1 | 0.5 | 0
+const crewWorkers  = () => workers.filter(w => w.active && w.pay_type !== "daily");
+const staffWorkers = () => workers.filter(w => w.active && w.pay_type === "daily");   // [{pcs, label, crew:{worker_id:share}}]
 
 /* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
@@ -538,6 +562,7 @@ async function loadAll(){
   delDefaults(); delRecalc();
   await renderDeliver();
   renderCrewChips();
+  renderStaffChips();
   renderBoard();
   renderCrewTable();
   renderWorkerPicker();
@@ -548,7 +573,7 @@ async function loadAll(){
 
 /* ================= TODAY ================= */
 function renderCrewChips(){
-  $("crew").innerHTML = workers.filter(w => w.active).map(w => `
+  $("crew").innerHTML = crewWorkers().map(w => `
     <div class="chip" data-w="${w.id}">
       <span class="n">${esc(w.name)}</span>
       <span class="lv">${esc(w.level)} · ${peso(w.base_pay)}</span>
@@ -569,11 +594,11 @@ function renderCrewChips(){
           x.setAttribute("aria-pressed", x === b ? "true" : "false"));
         chip.classList.toggle("on", s > 0);
         chip.classList.toggle("half", s === 0.5);
-        recalc();
+        recalc(); updateFlatHint();
       });
     });
   });
-  setAttendance(Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 1])));
+  setAttendance(Object.fromEntries(crewWorkers().map(w => [w.id, 1])));
 }
 function setAttendance(map){
   attendance = {...map};
@@ -602,11 +627,78 @@ function recalc(){
 }
 ["d-a","d-b","d-c5"].forEach(id => $(id).addEventListener("input", () => { recalc(); updateTally(); }));
 
+/* ---------- office staff (daily wage, no commission) ---------- */
+function renderStaffChips(){
+  const list = staffWorkers();
+  $("staffChips").innerHTML = list.length ? list.map(w => `
+    <div class="chip" data-s="${w.id}">
+      <span class="n">${esc(w.name.split(" ")[0])}</span>
+      <span class="lv">${esc(w.role || "Staff")} · ${peso(w.base_pay)}</span>
+      <div class="seg">
+        <button type="button" data-v="1">full</button>
+        <button type="button" data-v="0.5">½</button>
+        <button type="button" data-v="0">off</button>
+      </div>
+    </div>`).join("") : `<div class="empty">No office staff yet.</div>`;
+
+  $("staffChips").querySelectorAll(".chip").forEach(chip => {
+    const id = chip.dataset.s;
+    chip.querySelectorAll(".seg button").forEach(b => {
+      b.addEventListener("click", () => { staffAtt[id] = Number(b.dataset.v); paintStaff(); });
+    });
+  });
+  paintStaff();
+}
+function paintStaff(){
+  $("staffChips").querySelectorAll(".chip").forEach(chip => {
+    const s = Number(staffAtt[chip.dataset.s] ?? 0);
+    chip.querySelectorAll(".seg button").forEach(b =>
+      b.setAttribute("aria-pressed", Number(b.dataset.v) === s ? "true" : "false"));
+    chip.classList.toggle("on", s > 0);
+    chip.classList.toggle("half", s === 0.5);
+  });
+}
+async function loadStaffDay(iso, isNew){
+  if (isNew){
+    staffAtt = Object.fromEntries(staffWorkers().map(w => [w.id, 1]));
+  } else {
+    const rows = await get(`chb_staff_day?select=worker_id,share&log_date=eq.${iso}`);
+    staffAtt = Object.fromEntries(staffWorkers().map(w => [w.id, 0]));
+    rows.forEach(r => staffAtt[r.worker_id] = Number(r.share));
+  }
+  paintStaff();
+}
+
+/* ---------- delivery-only days ---------- */
+const isDeliveryDay = () => $("d-type").value === "delivery";
+function applyDayType(){
+  const del = isDeliveryDay();
+  $("flatWrap").classList.toggle("hidden", !del);
+  $("prodFields").classList.toggle("hidden", del);
+  $("prodTotal").classList.toggle("hidden", del);
+  const sw = $("splitOn").closest("label");
+  if (sw) sw.classList.toggle("hidden", del);
+  if (del && $("splitOn").checked){
+    $("splitOn").checked = false;
+    $("wholeDay").classList.remove("hidden");
+    $("blockWrap").classList.add("hidden");
+  }
+  updateFlatHint();
+}
+function updateFlatHint(){
+  if (!isDeliveryDay()) return;
+  const rate = +$("d-flat").value || 0;
+  const hc = Object.values(attendance).reduce((a,b) => a + Number(b || 0), 0);
+  $("saveHint").textContent = `${num(hc)} on the crew × ${peso(rate)} = ${peso(hc * rate)} payroll.`;
+}
+$("d-type").addEventListener("change", applyDayType);
+$("d-flat").addEventListener("input", updateFlatHint);
+
 /* ---------- split the day into blocks ---------- */
 const dayPcs = () => (+$("d-a").value || 0) + (+$("d-b").value || 0) + (+$("d-c5").value || 0);
 const blockCrewCount = b => Object.values(b.crew).reduce((a,v) => a + Number(v || 0), 0);
 
-function activeWorkers(){ return workers.filter(w => w.active); }
+function activeWorkers(){ return crewWorkers(); }
 
 function newBlock(copyFrom){
   return {
@@ -715,10 +807,16 @@ async function loadDayInto(iso){
     $("splitOn").checked = false;
     $("wholeDay").classList.remove("hidden");
     $("blockWrap").classList.add("hidden");
-    setAttendance(Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 1])));
+    $("d-type").value = "production"; $("d-flat").value = 600; applyDayType();
+    setAttendance(Object.fromEntries(crewWorkers().map(w => [w.id, 1])));
     $("saveHint").textContent = "New day.";
+    await loadStaffDay(iso, true);
     return;
   }
+  await loadStaffDay(iso, false);
+  $("d-type").value = d.day_type || "production";
+  if (d.flat_base) $("d-flat").value = d.flat_base;
+  applyDayType();
   $("d-a").value = d.chb4_a; $("d-b").value = d.chb4_b; $("d-c5").value = d.chb5;
   $("d-cem").value = d.cement_bags ?? ""; $("d-sale").value = d.sale_type;
   const rows = await get(`chb_day_blocks?select=*&log_date=eq.${iso}&order=seq`);
@@ -734,7 +832,7 @@ async function loadDayInto(iso){
     $("splitOn").checked = true;
     $("wholeDay").classList.add("hidden");
     $("blockWrap").classList.remove("hidden");
-    const map = Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 0]));
+    const map = Object.fromEntries(crewWorkers().map(w => [w.id, 0]));
     blocks.forEach(b => Object.keys(b.crew).forEach(id => map[id] = 1));
     setAttendance(map);
     renderBlocks();
@@ -746,7 +844,7 @@ async function loadDayInto(iso){
   $("splitOn").checked = false;
   $("wholeDay").classList.remove("hidden");
   $("blockWrap").classList.add("hidden");
-  const map = Object.fromEntries(workers.filter(w => w.active).map(w => [w.id, 0]));
+  const map = Object.fromEntries(crewWorkers().map(w => [w.id, 0]));
   const only = bySeq[seqs[0]] || {crew:{}};
   Object.entries(only.crew).forEach(([id, s]) => map[id] = Number(s));
   setAttendance(map);
@@ -758,7 +856,7 @@ $("saveDay").addEventListener("click", async () => {
   const btn = $("saveDay");
   try{
     btn.disabled = true; btn.textContent = "Saving…";
-    const split = $("splitOn").checked;
+    const split = $("splitOn").checked && !isDeliveryDay();
     let list = [], blockPayload = null;
 
     if (split){
@@ -784,15 +882,24 @@ $("saveDay").addEventListener("click", async () => {
       if (!list.length) throw new Error("Mark at least one worker present.");
     }
 
+    const del = isDeliveryDay();
+    if (del && !(+$("d-flat").value > 0)) throw new Error("Enter the day rate.");
     await rpc("chb_save_day", {
       p_date: $("d-date").value,
-      p_a: +$("d-a").value || 0,
-      p_b: +$("d-b").value || 0,
-      p_c5: +$("d-c5").value || 0,
-      p_cement: $("d-cem").value === "" ? null : +$("d-cem").value,
+      p_a: del ? 0 : (+$("d-a").value || 0),
+      p_b: del ? 0 : (+$("d-b").value || 0),
+      p_c5: del ? 0 : (+$("d-c5").value || 0),
+      p_cement: del ? null : ($("d-cem").value === "" ? null : +$("d-cem").value),
       p_sale: $("d-sale").value,
       p_attendance: list,
-      p_blocks: blockPayload
+      p_blocks: del ? null : blockPayload,
+      p_day_type: del ? "delivery" : "production",
+      p_flat_base: del ? +$("d-flat").value : null
+    });
+    await rpc("chb_save_staff_day", {
+      p_date: $("d-date").value,
+      p_staff: Object.entries(staffAtt).filter(([,s]) => Number(s) > 0)
+                 .map(([worker_id, share]) => ({worker_id:Number(worker_id), share:Number(share)}))
     });
     days = await get("chb_days?select=*&order=log_date.desc");
     await renderStock();
@@ -839,7 +946,7 @@ function renderBoard(){
     <thead><tr><th>Date</th><th>Pieces</th><th>Rate</th><th>Crew</th>
       <th>Share</th><th>Payroll</th><th>Profit</th></tr></thead>
     <tbody>${days.map(d => `<tr>
-      <td>${fmtDate(d.log_date)}</td>
+      <td>${fmtDate(d.log_date)}${d.day_type === "delivery" ? ' <span style="font-size:11px;color:var(--amber)">delivery</span>' : ""}</td>
       <td class="n">${num(d.total_pcs)}</td>
       <td class="n">${peso2(d.rate)}</td>
       <td class="n">${num(d.headcount)}</td>
@@ -1215,7 +1322,7 @@ async function renderCrewTable(){
       <td>${esc(w.name)}</td><td>${esc(w.level)}</td>
       <td class="n">${peso(w.base_pay)}</td>
       <td class="n">${num(w.days_total)}</td>
-      <td class="n">${w.days_remaining === null ? "—" :
+      <td class="n">${w.level === "Staff" ? "daily wage" : w.days_remaining === null ? "—" :
         (Number(w.days_remaining) === 0 ? "ready" : num(w.days_remaining))}</td></tr>`).join("")}</tbody>`;
 }
 function renderWorkerPicker(){
@@ -1230,6 +1337,7 @@ $("w-pick").addEventListener("change", () => {
   $("w-start").value = w?.start_date ?? "";
   $("w-before").value = w?.days_before ?? 0;
   $("w-active").value = String(w?.active ?? true);
+  $("w-role").value = w?.role ?? "";
 });
 $("saveWorker").addEventListener("click", async () => {
   try{
@@ -1241,10 +1349,12 @@ $("saveWorker").addEventListener("click", async () => {
       p_base: +$("w-base").value || 0,
       p_start: $("w-start").value || null,
       p_days_before: +$("w-before").value || 0,
-      p_active: $("w-active").value === "true"
+      p_active: $("w-active").value === "true",
+      p_pay_type: $("w-level").value === "Staff" ? "daily" : "commission",
+      p_role: $("w-role").value.trim() || null
     });
     workers = await get("chb_worker_list?select=*");
-    renderCrewChips(); renderWorkerPicker(); await renderCrewTable();
+    renderCrewChips(); renderStaffChips(); renderWorkerPicker(); await renderCrewTable();
     banner("Worker saved.", "ok");
   }catch(e){ banner(e.message, "err"); }
 });
